@@ -4,9 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>班级朋友圈共享</title>
+    <!-- 使用稳定的CDN资源 -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/css/font-awesome.min.css" rel="stylesheet">
     <script>
+        // 简化Tailwind配置，避免潜在的配置错误
         tailwind.config = {
             theme: {
                 extend: {
@@ -27,23 +29,6 @@
             }
             .card-shadow {
                 box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            }
-            .image-grid {
-                display: grid;
-                gap: 4px;
-            }
-            .grid-1 { grid-template-columns: 1fr; }
-            .grid-2 { grid-template-columns: repeat(2, 1fr); }
-            .grid-3 { grid-template-columns: repeat(3, 1fr); }
-            .image-item {
-                aspect-ratio: 1/1;
-                overflow: hidden;
-                border-radius: 4px;
-            }
-            .image-item img {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
             }
         }
     </style>
@@ -139,418 +124,405 @@
     <!-- 主要内容区 -->
     <main class="container mx-auto px-4 py-8">
         <div id="postsContainer" class="max-w-3xl mx-auto space-y-6">
-            <!-- 动态内容将通过JavaScript动态生成 -->
+            <!-- 初始加载提示 -->
+            <div id="initialMessage" class="bg-white rounded-xl p-8 text-center card-shadow">
+                <i class="fa fa-comment-o text-5xl text-gray-300 mb-4"></i>
+                <p class="text-gray-500 text-lg">班级朋友圈已准备就绪！</p>
+                <p class="text-gray-400 mt-2">点击"添加动态"开始分享内容</p>
+            </div>
         </div>
     </main>
 
     <script>
-        // 存储选中的图片
-        let selectedImages = [];
-        
-        // 页面加载完成后初始化
-        document.addEventListener('DOMContentLoaded', () => {
-            // 初始化帖子列表
-            renderPosts();
+        // 确保DOM完全加载后再执行
+        document.addEventListener('DOMContentLoaded', function() {
+            // 存储选中的图片
+            let selectedImages = [];
+            
+            // 初始化页面
+            try {
+                renderPosts();
+                bindEventListeners();
+                
+                // 显示页面加载成功的日志
+                console.log('页面加载成功');
+            } catch (error) {
+                console.error('页面初始化错误:', error);
+                // 显示友好的错误提示
+                document.getElementById('postsContainer').innerHTML = `
+                    <div class="bg-white rounded-xl p-6 text-center card-shadow">
+                        <i class="fa fa-exclamation-triangle text-4xl text-yellow-500 mb-4"></i>
+                        <p class="text-gray-700">页面加载时出现问题</p>
+                        <button onclick="window.location.reload()" class="mt-4 bg-primary text-white px-4 py-2 rounded-lg">
+                            刷新页面重试
+                        </button>
+                    </div>
+                `;
+            }
             
             // 绑定所有事件监听器
-            bindEventListeners();
-        });
-        
-        // 绑定事件监听器
-        function bindEventListeners() {
-            // 添加动态按钮
-            document.getElementById('addPostBtn').addEventListener('click', () => {
-                document.getElementById('postModal').classList.remove('hidden');
-                document.getElementById('postForm').reset();
-                selectedImages = [];
-                clearImagePreviews();
-                document.getElementById('imageCountWarning').classList.add('hidden');
-            });
-            
-            // 关闭发布模态框
-            document.getElementById('postModal').addEventListener('click', (e) => {
-                if (e.target === document.getElementById('postModal')) {
-                    document.getElementById('postModal').classList.add('hidden');
-                }
-            });
-            
-            // 分享按钮
-            document.getElementById('shareBtn').addEventListener('click', () => {
-                const shareLink = window.location.href;
-                document.getElementById('shareLink').value = shareLink;
-                document.getElementById('shareModal').classList.remove('hidden');
-            });
-            
-            // 关闭分享模态框
-            document.getElementById('shareModal').addEventListener('click', (e) => {
-                if (e.target === document.getElementById('shareModal')) {
-                    document.getElementById('shareModal').classList.add('hidden');
-                }
-            });
-            
-            document.getElementById('closeShare').addEventListener('click', () => {
-                document.getElementById('shareModal').classList.add('hidden');
-            });
-            
-            // 复制链接
-            document.getElementById('copyLink').addEventListener('click', () => {
-                const shareLink = document.getElementById('shareLink');
-                shareLink.select();
-                document.execCommand('copy');
-                
-                const originalText = document.getElementById('copyLink').textContent;
-                document.getElementById('copyLink').textContent = '已复制';
-                setTimeout(() => {
-                    document.getElementById('copyLink').textContent = originalText;
-                }, 2000);
-            });
-            
-            // 图片上传按钮点击事件
-            document.getElementById('uploadButton').addEventListener('click', () => {
-                document.getElementById('imageUpload').click();
-            });
-            
-            // 图片选择处理
-            document.getElementById('imageUpload').addEventListener('change', handleImageSelection);
-            
-            // 发布动态表单提交
-            document.getElementById('postForm').addEventListener('submit', handlePostSubmission);
-            
-            // 帖子容器事件委托
-            document.getElementById('postsContainer').addEventListener('click', (e) => {
-                // 删除帖子
-                if (e.target.closest('.delete-post')) {
-                    const postId = e.target.closest('.delete-post').dataset.postId;
-                    if (confirm('确定要删除这条动态吗？')) {
-                        deletePost(postId);
-                    }
-                }
-                
-                // 切换评论显示
-                if (e.target.closest('.toggle-comments')) {
-                    const commentsContainer = e.target.closest('.toggle-comments').nextElementSibling;
-                    commentsContainer.classList.toggle('hidden');
-                }
-                
-                // 删除图片预览
-                if (e.target.closest('.remove-image')) {
-                    const index = parseInt(e.target.closest('.remove-image').dataset.index);
-                    selectedImages.splice(index, 1);
+            function bindEventListeners() {
+                // 添加动态按钮
+                document.getElementById('addPostBtn').addEventListener('click', function() {
+                    document.getElementById('postModal').classList.remove('hidden');
+                    document.getElementById('postForm').reset();
+                    selectedImages = [];
                     clearImagePreviews();
-                    selectedImages.forEach((src, i) => {
-                        addImagePreview(src, i);
-                    });
                     document.getElementById('imageCountWarning').classList.add('hidden');
-                }
-            });
-            
-            // 评论表单提交
-            document.getElementById('postsContainer').addEventListener('submit', (e) => {
-                if (e.target.classList.contains('comment-form')) {
-                    e.preventDefault();
-                    const postId = e.target.closest('[data-post-id]').dataset.postId;
-                    const nameInput = e.target.querySelector('.comment-name');
-                    const contentInput = e.target.querySelector('.comment-content');
-                    
-                    const name = nameInput.value.trim();
-                    const content = contentInput.value.trim();
-                    
-                    if (name && content) {
-                        addComment(postId, name, content);
-                        nameInput.value = '';
-                        contentInput.value = '';
-                    } else {
-                        alert('请输入姓名和评论内容');
-                    }
-                }
-            });
-        }
-        
-        // 处理图片选择 - 确保正确读取图片
-        function handleImageSelection(e) {
-            const files = e.target.files;
-            if (!files || files.length === 0) return;
-            
-            // 检查图片数量限制
-            if (selectedImages.length + files.length > 9) {
-                document.getElementById('imageCountWarning').classList.remove('hidden');
-                document.getElementById('imageUpload').value = '';
-                return;
-            }
-            
-            document.getElementById('imageCountWarning').classList.add('hidden');
-            
-            // 处理每张选中的图片
-            Array.from(files).forEach(file => {
-                // 验证文件类型和大小
-                if (!file.type.startsWith('image/')) {
-                    alert('请选择图片文件（JPG、PNG等）');
-                    return;
-                }
-                
-                // 限制图片大小（5MB以内）
-                if (file.size > 5 * 1024 * 1024) {
-                    alert('图片大小不能超过5MB');
-                    return;
-                }
-                
-                const reader = new FileReader();
-                
-                // 读取成功时显示预览
-                reader.onload = (event) => {
-                    try {
-                        // 创建图片对象验证是否为有效图片
-                        const img = new Image();
-                        img.src = event.target.result;
-                        
-                        img.onload = () => {
-                            // 图片有效，添加到预览
-                            selectedImages.push(event.target.result);
-                            addImagePreview(event.target.result, selectedImages.length - 1);
-                        };
-                        
-                        img.onerror = () => {
-                            alert('选择的文件不是有效的图片');
-                        };
-                    } catch (error) {
-                        console.error('处理图片时出错:', error);
-                        alert('处理图片时出错，请重试');
-                    }
-                };
-                
-                // 读取失败处理
-                reader.onerror = () => {
-                    alert('无法读取图片文件，请重试');
-                };
-                
-                // 以DataURL格式读取图片
-                reader.readAsDataURL(file);
-            });
-            
-            // 重置输入以允许重复选择相同文件
-            document.getElementById('imageUpload').value = '';
-        }
-        
-        // 添加图片预览
-        function addImagePreview(src, index) {
-            const uploadContainer = document.getElementById('imageUploadContainer');
-            const previewDiv = document.createElement('div');
-            previewDiv.className = 'relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200';
-            previewDiv.innerHTML = `
-                <img src="${src}" alt="图片预览" class="w-full h-full object-cover" onload="this.style.opacity=1" style="opacity:0;transition:opacity 0.3s">
-                <button class="remove-image absolute top-0 right-0 bg-black/50 text-white w-6 h-6 flex items-center justify-center text-xs" data-index="${index}">
-                    <i class="fa fa-times"></i>
-                </button>
-            `;
-            // 插入到上传按钮前面
-            uploadContainer.insertBefore(previewDiv, uploadContainer.firstChild);
-        }
-        
-        // 清除图片预览
-        function clearImagePreviews() {
-            const uploadContainer = document.getElementById('imageUploadContainer');
-            // 保留上传按钮，移除其他所有子元素
-            const uploadButton = document.getElementById('uploadButton');
-            uploadContainer.innerHTML = '';
-            uploadContainer.appendChild(uploadButton);
-        }
-        
-        // 处理帖子提交
-        function handlePostSubmission(e) {
-            e.preventDefault();
-            
-            const name = document.getElementById('name').value.trim();
-            const content = document.getElementById('content').value.trim();
-            
-            if (!name) {
-                alert('请输入姓名');
-                return;
-            }
-            
-            // 创建新帖子
-            const newPost = {
-                id: Date.now().toString(),
-                name,
-                content,
-                images: [...selectedImages], // 确保正确复制图片数组
-                timestamp: new Date().toISOString(),
-                comments: []
-            };
-            
-            // 保存帖子
-            savePost(newPost);
-            
-            // 关闭模态框并刷新列表
-            document.getElementById('postModal').classList.add('hidden');
-            renderPosts();
-        }
-        
-        // 从本地存储获取帖子
-        function getPosts() {
-            const posts = localStorage.getItem('classMomentsPosts');
-            return posts ? JSON.parse(posts) : [];
-        }
-        
-        // 保存帖子到本地存储
-        function savePost(post) {
-            try {
-                const posts = getPosts();
-                posts.unshift(post); // 添加到开头
-                localStorage.setItem('classMomentsPosts', JSON.stringify(posts));
-            } catch (error) {
-                console.error('保存帖子失败:', error);
-                alert('保存动态失败，请减少图片数量或尺寸后重试');
-            }
-        }
-        
-        // 删除帖子
-        function deletePost(id) {
-            let posts = getPosts();
-            posts = posts.filter(post => post.id !== id);
-            localStorage.setItem('classMomentsPosts', JSON.stringify(posts));
-            renderPosts();
-        }
-        
-        // 添加评论
-        function addComment(postId, name, content) {
-            const posts = getPosts();
-            const postIndex = posts.findIndex(post => post.id === postId);
-            
-            if (postIndex !== -1) {
-                if (!posts[postIndex].comments) {
-                    posts[postIndex].comments = [];
-                }
-                
-                posts[postIndex].comments.push({
-                    name,
-                    content,
-                    timestamp: new Date().toISOString()
                 });
                 
+                // 关闭发布模态框
+                document.getElementById('postModal').addEventListener('click', function(e) {
+                    if (e.target === document.getElementById('postModal')) {
+                        document.getElementById('postModal').classList.add('hidden');
+                    }
+                });
+                
+                // 分享按钮
+                document.getElementById('shareBtn').addEventListener('click', function() {
+                    const shareLink = window.location.href;
+                    document.getElementById('shareLink').value = shareLink;
+                    document.getElementById('shareModal').classList.remove('hidden');
+                });
+                
+                // 关闭分享模态框
+                document.getElementById('closeShare').addEventListener('click', function() {
+                    document.getElementById('shareModal').classList.add('hidden');
+                });
+                
+                // 复制链接
+                document.getElementById('copyLink').addEventListener('click', function() {
+                    const shareLink = document.getElementById('shareLink');
+                    shareLink.select();
+                    document.execCommand('copy');
+                    
+                    const originalText = this.textContent;
+                    this.textContent = '已复制';
+                    setTimeout(() => {
+                        this.textContent = originalText;
+                    }, 2000);
+                });
+                
+                // 图片上传按钮点击事件
+                document.getElementById('uploadButton').addEventListener('click', function() {
+                    document.getElementById('imageUpload').click();
+                });
+                
+                // 图片选择处理
+                document.getElementById('imageUpload').addEventListener('change', handleImageSelection);
+                
+                // 发布动态表单提交
+                document.getElementById('postForm').addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    handlePostSubmission();
+                });
+                
+                // 帖子容器事件委托
+                document.getElementById('postsContainer').addEventListener('click', function(e) {
+                    // 删除帖子
+                    if (e.target.closest('.delete-post')) {
+                        const postId = e.target.closest('.delete-post').dataset.postId;
+                        if (confirm('确定要删除这条动态吗？')) {
+                            deletePost(postId);
+                        }
+                    }
+                    
+                    // 切换评论显示
+                    if (e.target.closest('.toggle-comments')) {
+                        const commentsContainer = e.target.closest('.toggle-comments').nextElementSibling;
+                        commentsContainer.classList.toggle('hidden');
+                    }
+                    
+                    // 删除图片预览
+                    if (e.target.closest('.remove-image')) {
+                        const index = parseInt(e.target.closest('.remove-image').dataset.index);
+                        selectedImages.splice(index, 1);
+                        clearImagePreviews();
+                        selectedImages.forEach((src, i) => {
+                            addImagePreview(src, i);
+                        });
+                        document.getElementById('imageCountWarning').classList.add('hidden');
+                    }
+                });
+                
+                // 评论表单提交
+                document.getElementById('postsContainer').addEventListener('submit', function(e) {
+                    if (e.target.classList.contains('comment-form')) {
+                        e.preventDefault();
+                        const postId = e.target.closest('[data-post-id]').dataset.postId;
+                        const nameInput = e.target.querySelector('.comment-name');
+                        const contentInput = e.target.querySelector('.comment-content');
+                        
+                        const name = nameInput.value.trim();
+                        const content = contentInput.value.trim();
+                        
+                        if (name && content) {
+                            addComment(postId, name, content);
+                            nameInput.value = '';
+                            contentInput.value = '';
+                        } else {
+                            alert('请输入姓名和评论内容');
+                        }
+                    }
+                });
+            }
+            
+            // 处理图片选择
+            function handleImageSelection(e) {
+                const files = e.target.files;
+                if (!files || files.length === 0) return;
+                
+                // 检查图片数量限制
+                if (selectedImages.length + files.length > 9) {
+                    document.getElementById('imageCountWarning').classList.remove('hidden');
+                    document.getElementById('imageUpload').value = '';
+                    return;
+                }
+                
+                document.getElementById('imageCountWarning').classList.add('hidden');
+                
+                // 处理每张选中的图片
+                Array.from(files).forEach(file => {
+                    // 验证文件类型
+                    if (!file.type.startsWith('image/')) {
+                        alert('请选择图片文件');
+                        return;
+                    }
+                    
+                    // 限制图片大小
+                    if (file.size > 5 * 1024 * 1024) {
+                        alert('图片大小不能超过5MB');
+                        return;
+                    }
+                    
+                    const reader = new FileReader();
+                    
+                    reader.onload = function(event) {
+                        try {
+                            selectedImages.push(event.target.result);
+                            addImagePreview(event.target.result, selectedImages.length - 1);
+                        } catch (error) {
+                            console.error('处理图片时出错:', error);
+                            alert('处理图片失败，请重试');
+                        }
+                    };
+                    
+                    reader.readAsDataURL(file);
+                });
+                
+                // 重置输入
+                document.getElementById('imageUpload').value = '';
+            }
+            
+            // 添加图片预览
+            function addImagePreview(src, index) {
+                const uploadContainer = document.getElementById('imageUploadContainer');
+                const previewDiv = document.createElement('div');
+                previewDiv.className = 'relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200';
+                previewDiv.innerHTML = `
+                    <img src="${src}" alt="图片预览" class="w-full h-full object-cover">
+                    <button class="remove-image absolute top-0 right-0 bg-black/50 text-white w-6 h-6 flex items-center justify-center text-xs" data-index="${index}">
+                        <i class="fa fa-times"></i>
+                    </button>
+                `;
+                uploadContainer.insertBefore(previewDiv, uploadContainer.firstChild);
+            }
+            
+            // 清除图片预览
+            function clearImagePreviews() {
+                const uploadContainer = document.getElementById('imageUploadContainer');
+                const uploadButton = document.getElementById('uploadButton');
+                uploadContainer.innerHTML = '';
+                uploadContainer.appendChild(uploadButton);
+            }
+            
+            // 处理帖子提交
+            function handlePostSubmission() {
+                const name = document.getElementById('name').value.trim();
+                const content = document.getElementById('content').value.trim();
+                
+                if (!name) {
+                    alert('请输入姓名');
+                    return;
+                }
+                
+                // 创建新帖子
+                const newPost = {
+                    id: Date.now().toString(),
+                    name,
+                    content,
+                    images: [...selectedImages],
+                    timestamp: new Date().toISOString(),
+                    comments: []
+                };
+                
+                // 保存帖子
+                try {
+                    savePost(newPost);
+                    document.getElementById('postModal').classList.add('hidden');
+                    renderPosts();
+                } catch (error) {
+                    console.error('保存帖子失败:', error);
+                    alert('保存失败，请减少图片数量或尺寸后重试');
+                }
+            }
+            
+            // 从本地存储获取帖子
+            function getPosts() {
+                try {
+                    const posts = localStorage.getItem('classMomentsPosts');
+                    return posts ? JSON.parse(posts) : [];
+                } catch (error) {
+                    console.error('获取帖子失败:', error);
+                    return [];
+                }
+            }
+            
+            // 保存帖子到本地存储
+            function savePost(post) {
+                const posts = getPosts();
+                posts.unshift(post);
+                localStorage.setItem('classMomentsPosts', JSON.stringify(posts));
+            }
+            
+            // 删除帖子
+            function deletePost(id) {
+                let posts = getPosts();
+                posts = posts.filter(post => post.id !== id);
                 localStorage.setItem('classMomentsPosts', JSON.stringify(posts));
                 renderPosts();
             }
-        }
-        
-        // 渲染所有帖子
-        function renderPosts() {
-            const postsContainer = document.getElementById('postsContainer');
-            const posts = getPosts();
             
-            postsContainer.innerHTML = '';
-            
-            if (posts.length === 0) {
-                postsContainer.innerHTML = `
-                    <div class="bg-white rounded-xl p-8 text-center card-shadow">
-                        <i class="fa fa-comment-o text-5xl text-gray-300 mb-4"></i>
-                        <p class="text-gray-500 text-lg">还没有动态，快来发布第一条动态吧！</p>
-                    </div>
-                `;
-                return;
+            // 添加评论
+            function addComment(postId, name, content) {
+                const posts = getPosts();
+                const postIndex = posts.findIndex(post => post.id === postId);
+                
+                if (postIndex !== -1) {
+                    if (!posts[postIndex].comments) {
+                        posts[postIndex].comments = [];
+                    }
+                    
+                    posts[postIndex].comments.push({
+                        name,
+                        content,
+                        timestamp: new Date().toISOString()
+                    });
+                    
+                    localStorage.setItem('classMomentsPosts', JSON.stringify(posts));
+                    renderPosts();
+                }
             }
             
-            posts.forEach(post => {
-                postsContainer.appendChild(createPostElement(post));
-            });
-        }
-        
-        // 创建单个帖子元素 - 确保图片正确显示
-        function createPostElement(post) {
-            const postElement = document.createElement('div');
-            postElement.className = 'bg-white rounded-xl overflow-hidden card-shadow hover:shadow-lg transition-all';
-            postElement.dataset.postId = post.id;
-            
-            // 格式化日期
-            const date = new Date(post.timestamp);
-            const formattedDate = date.toLocaleString('zh-CN', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-            
-            // 构建评论HTML
-            let commentsHtml = '';
-            if (post.comments && post.comments.length > 0) {
-                post.comments.forEach(comment => {
-                    commentsHtml += `
-                        <div class="flex mb-2">
-                            <span class="font-semibold mr-2">${comment.name}:</span>
-                            <span>${comment.content}</span>
+            // 渲染所有帖子
+            function renderPosts() {
+                const postsContainer = document.getElementById('postsContainer');
+                const posts = getPosts();
+                
+                // 清空容器
+                postsContainer.innerHTML = '';
+                
+                if (posts.length === 0) {
+                    postsContainer.innerHTML = `
+                        <div class="bg-white rounded-xl p-8 text-center card-shadow">
+                            <i class="fa fa-comment-o text-5xl text-gray-300 mb-4"></i>
+                            <p class="text-gray-500 text-lg">还没有动态，快来发布第一条动态吧！</p>
                         </div>
                     `;
-                });
-            }
-            
-            // 构建图片网格 - 修复图片显示问题
-            let imagesHtml = '';
-            if (post.images && post.images.length > 0) {
-                const imageCount = post.images.length;
-                let gridClass = 'grid-3';
-                
-                if (imageCount === 1) {
-                    gridClass = 'grid-1';
-                } else if (imageCount === 2 || imageCount === 4) {
-                    gridClass = 'grid-2';
+                    return;
                 }
                 
-                imagesHtml = `<div class="image-grid ${gridClass} my-4">`;
-                post.images.forEach(imgSrc => {
-                    // 添加错误处理，图片加载失败时显示占位图
-                    imagesHtml += `
-                        <div class="image-item">
-                            <img src="${imgSrc}" alt="发布的图片" 
-                                 class="w-full h-full object-cover"
-                                 onload="this.style.opacity=1"
-                                 onerror="this.src='https://picsum.photos/200/200?grayscale&blur=2'; this.alt='图片加载失败'"
-                                 style="opacity:0;transition:opacity 0.3s">
-                        </div>
-                    `;
+                // 添加帖子
+                posts.forEach(post => {
+                    postsContainer.appendChild(createPostElement(post));
                 });
-                imagesHtml += `</div>`;
             }
             
-            // 帖子内容
-            postElement.innerHTML = `
-                <div class="p-6">
-                    <div class="flex justify-between items-start mb-4">
-                        <div>
-                            <h3 class="font-bold text-lg">${post.name}</h3>
-                            <p class="text-gray-500 text-sm">${formattedDate}</p>
-                        </div>
-                        <button class="delete-post text-danger hover:text-danger/80" data-post-id="${post.id}">
-                            <i class="fa fa-trash-o text-xl"></i>
-                        </button>
-                    </div>
-                    
-                    ${post.content ? `<p class="text-gray-700 mb-4">${post.content}</p>` : ''}
-                    
-                    ${imagesHtml}
-                    
-                    <div class="mt-4">
-                        <button class="toggle-comments text-primary hover:text-primary/80 text-sm font-medium mb-3">
-                            <i class="fa fa-comments-o mr-1"></i>
-                            ${post.comments && post.comments.length > 0 ? `查看 ${post.comments.length} 条评论` : '评论'}
-                        </button>
-                        
-                        <div class="comments-container hidden bg-gray-50 p-4 rounded-lg mb-3">
-                            ${commentsHtml || '<p class="text-gray-500 text-sm">暂无评论</p>'}
-                        </div>
-                        
-                        <form class="comment-form flex space-x-2">
-                            <input type="text" placeholder="你的名字" class="comment-name flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
-                            <input type="text" placeholder="添加评论..." class="comment-content flex-2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
-                            <button type="submit" class="bg-primary text-white px-3 py-2 rounded-lg hover:bg-primary/90">
-                                <i class="fa fa-paper-plane"></i>
+            // 创建单个帖子元素
+            function createPostElement(post) {
+                const postElement = document.createElement('div');
+                postElement.className = 'bg-white rounded-xl overflow-hidden card-shadow hover:shadow-lg transition-all';
+                postElement.dataset.postId = post.id;
+                
+                // 格式化日期
+                const date = new Date(post.timestamp);
+                const formattedDate = date.toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                
+                // 构建评论HTML
+                let commentsHtml = '';
+                if (post.comments && post.comments.length > 0) {
+                    post.comments.forEach(comment => {
+                        commentsHtml += `
+                            <div class="flex mb-2">
+                                <span class="font-semibold mr-2">${comment.name}:</span>
+                                <span>${comment.content}</span>
+                            </div>
+                        `;
+                    });
+                }
+                
+                // 构建图片网格
+                let imagesHtml = '';
+                if (post.images && post.images.length > 0) {
+                    imagesHtml = `<div class="grid grid-cols-3 gap-2 my-4">`;
+                    post.images.forEach(imgSrc => {
+                        imagesHtml += `
+                            <div class="aspect-square overflow-hidden rounded-lg">
+                                <img src="${imgSrc}" alt="发布的图片" class="w-full h-full object-cover"
+                                     onerror="this.src='https://picsum.photos/200/200?grayscale'; this.alt='图片加载失败'">
+                            </div>
+                        `;
+                    });
+                    imagesHtml += `</div>`;
+                }
+                
+                // 帖子内容
+                postElement.innerHTML = `
+                    <div class="p-6">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 class="font-bold text-lg">${post.name}</h3>
+                                <p class="text-gray-500 text-sm">${formattedDate}</p>
+                            </div>
+                            <button class="delete-post text-danger hover:text-danger/80" data-post-id="${post.id}">
+                                <i class="fa fa-trash-o text-xl"></i>
                             </button>
-                        </form>
+                        </div>
+                        
+                        ${post.content ? `<p class="text-gray-700 mb-4">${post.content}</p>` : ''}
+                        
+                        ${imagesHtml}
+                        
+                        <div class="mt-4">
+                            <button class="toggle-comments text-primary hover:text-primary/80 text-sm font-medium mb-3">
+                                <i class="fa fa-comments-o mr-1"></i>
+                                ${post.comments && post.comments.length > 0 ? `查看 ${post.comments.length} 条评论` : '评论'}
+                            </button>
+                            
+                            <div class="comments-container hidden bg-gray-50 p-4 rounded-lg mb-3">
+                                ${commentsHtml || '<p class="text-gray-500 text-sm">暂无评论</p>'}
+                            </div>
+                            
+                            <form class="comment-form flex space-x-2">
+                                <input type="text" placeholder="你的名字" class="comment-name flex-1 px-3 py-2 border border-gray-300 rounded-lg">
+                                <input type="text" placeholder="添加评论..." class="comment-content flex-2 px-3 py-2 border border-gray-300 rounded-lg">
+                                <button type="submit" class="bg-primary text-white px-3 py-2 rounded-lg hover:bg-primary/90">
+                                    <i class="fa fa-paper-plane"></i>
+                                </button>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            `;
-            
-            return postElement;
-        }
+                `;
+                
+                return postElement;
+            }
+        });
     </script>
 </body>
 </html>
